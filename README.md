@@ -1,123 +1,106 @@
-# Document Q&A Assistant (Google NotebookLM Clone)
+# Vellum
 
-A RAG-powered application that allows users to upload documents (PDF or text) and have conversations with them. The system processes documents, stores embeddings in a vector database, and generates answers grounded in the document content.
+A retrieval-augmented chat app for your own documents. Upload a PDF or text file, and Vellum chunks it, embeds it, stores the vectors, and answers questions grounded in the source — no hallucinated facts.
 
 ## Features
 
-- Upload PDF or plain text documents
-- Automatic chunking of documents for efficient retrieval
-- Semantic search using embeddings
-- Q&A interaction powered by Groq LLM
-- Answers grounded in document content (no hallucinations)
+- Drag-and-drop upload for PDF and TXT
+- Sentence-aware chunking with overlap for context preservation
+- Semantic retrieval over a hosted vector store
+- Grounded answers with a refined chat interface
+- Light and dark mode
 
 ## Architecture
 
-### RAG Pipeline
-
-```
-Document Upload → Text Extraction → Chunking → Embedding → Vector Storage → Retrieval → Generation
+```text
+Upload → Text Extraction → Chunking → Embedding → Vector Store → Retrieval → Generation
 ```
 
-1. **Ingestion**: User uploads PDF or TXT file
-2. **Text Extraction**: Parse document text using unpdf
-3. **Chunking**: Split text into semantically coherent chunks
-4. **Embedding**: Generate vector embeddings using OpenAI text-embedding-3-small via Vercel AI Gateway
-5. **Storage**: Store embeddings in Upstash Vector (hosted vector database)
-6. **Retrieval**: Find relevant chunks using similarity search
-7. **Generation**: Generate answer using Vercel AI SDK with retrieved context
+1. **Ingest** — user drops a PDF or TXT file
+2. **Extract** — `unpdf` pulls plain text out of PDFs
+3. **Chunk** — sentence-boundary splitter with character-window overlap
+4. **Embed** — `openai/text-embedding-3-small` via the Vercel AI Gateway
+5. **Store** — vectors written to Upstash Vector (hosted)
+6. **Retrieve** — top-k similarity search per question
+7. **Generate** — `openai/gpt-5.3-chat` answers using only retrieved context
 
-## Tech Stack
+## Tech stack
 
-| Layer | Technology |
-|-------|-------------|
-| **Framework** | Next.js 16 with TypeScript |
-| **UI** | React 19, Tailwind CSS 4 |
-| **PDF Parsing** | unpdf |
-| **Embeddings** | OpenAI text-embedding-3-small via Vercel AI Gateway |
-| **Vector Store** | Upstash Vector (hosted) |
-| **LLM Provider** | Vercel AI Gateway |
-| **LLM SDK** | Vercel AI SDK |
-| **LLM Model** | openai/gpt-5.3-chat |
+| Layer        | Technology                                              |
+| ------------ | ------------------------------------------------------- |
+| Framework    | Next.js 16 (App Router, TypeScript)                     |
+| UI           | React 19, Tailwind CSS 4                                |
+| PDF parsing  | unpdf                                                   |
+| Embeddings   | `openai/text-embedding-3-small` via Vercel AI Gateway   |
+| Vector store | Upstash Vector                                          |
+| LLM          | `openai/gpt-5.3-chat` via Vercel AI SDK                 |
 
-## Chunking Strategy
+## Chunking strategy
 
-This application uses a **Sentence-based Chunking with Overlap** strategy:
+Sentence-based chunking with character overlap:
 
-### Parameters
-- **Chunk Size**: 500 characters (configurable)
-- **Overlap**: 50 characters between consecutive chunks
-- **Separator**: Sentence-ending punctuation followed by whitespace (`(?<=[.!?])\s+`)
+- **Chunk size**: ~500 characters
+- **Overlap**: ~50 characters
+- **Splitter**: `(?<=[.!?])\s+`
 
-### How It Works
-
-1. **Sentence Splitting**: Text is split at sentence boundaries (., !, ?)
-2. **Building Chunks**: Sentences are accumulated until chunk size limit is reached
-3. **Overlap**: Last few words of the previous chunk are carried over to maintain context continuity
-4. **Final Chunk**: Any remaining text is saved as the final chunk
-
-### Why This Strategy?
-
-- **Context Preservation**: Overlapping chunks ensure no information is lost at boundaries
-- **Semantic Coherence**: Chunks align with sentence boundaries for natural meaning
-- **Efficient Retrieval**: Moderate chunk size balances relevance and context
-- **Configurable**: Easy to adjust chunk size based on document type
+Sentences are accumulated until the size budget is hit, the trailing slice of the previous chunk is carried into the next chunk to preserve context across boundaries, and the remainder is flushed as the final chunk. Sentence-aligned cuts keep meaning intact, while overlap keeps cross-chunk references retrievable.
 
 ## Setup
 
 ### Prerequisites
 
-1. Node.js 18+ installed
-2. Vercel AI Gateway configured
+- Node.js 18+
+- A Vercel AI Gateway key (proxies OpenAI)
+- An Upstash Vector database
 
-### Installation
+### Install and run
 
 ```bash
-# Clone the repository
 git clone <repository-url>
-cd rag-app
-
-# Install dependencies
+cd SimpleRag
 npm install
-
-# Configure environment
-cp .env.local.example .env.local
-# Edit .env.local with your Vercel AI Gateway credentials
-
-# Run the development server
 npm run dev
 ```
 
-### Environment Variables
+Open [http://localhost:3000](http://localhost:3000).
 
-Create a `.env.local` file:
+For a production build:
+
+```bash
+npm run build
+npm start
+```
+
+### Environment variables
+
+Create a `.env` file in the project root:
 
 ```env
-# Vercel AI Gateway (for embeddings and LLM)
-AI_GATEWAY_API_KEY=your_api_key_here
-
-# Upstash Vector (hosted vector database)
+AI_GATEWAY_API_KEY=your_vercel_ai_gateway_key
 UPSTASH_VECTOR_REST_URL=your_upstash_vector_url
 UPSTASH_VECTOR_REST_TOKEN=your_upstash_vector_token
 ```
 
-Set up a Vercel AI Gateway at [vercel.com/dashboard](https://vercel.com/dashboard) to proxy OpenAI requests.
+- Get an AI Gateway key at [vercel.com/dashboard](https://vercel.com/dashboard) → AI → Gateway.
+- Provision a vector database at [console.upstash.com](https://console.upstash.com/).
 
 ## Usage
 
-1. Open http://localhost:3000
-2. Upload a PDF or text document via drag-and-drop or file picker
-3. Wait for processing to complete (text extraction → chunking → embedding)
-4. Ask questions about the document in the chat interface
-5. Get answers grounded in the document content
+1. Open [http://localhost:3000](http://localhost:3000)
+2. Drop a PDF or TXT into the **Knowledge base** panel
+3. Wait for indexing (extract → chunk → embed → store)
+4. Ask anything about the document in the chat panel — answers are pulled from the file
 
-## API Endpoints
+## API
 
-### POST /api/upload
-Upload and process a document.
+### `POST /api/upload`
 
-**Request**: `multipart/form-data` with `file` field
+Upload and index a document.
+
+**Request**: `multipart/form-data` with a `file` field.
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -126,17 +109,18 @@ Upload and process a document.
 }
 ```
 
-### POST /api/query
-Ask a question about the uploaded document.
+### `POST /api/query`
+
+Ask a question against the indexed document.
 
 **Request**:
+
 ```json
-{
-  "question": "What is the main topic of this document?"
-}
+{ "question": "What is the main topic of this document?" }
 ```
 
 **Response**:
+
 ```json
 {
   "answer": "Based on the document, the main topic is...",
@@ -144,38 +128,30 @@ Ask a question about the uploaded document.
 }
 ```
 
-## Project Structure
+## Project structure
 
-```
-rag-app/
+```text
+SimpleRag/
 ├── src/
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── upload/route.ts    # Document upload endpoint
 │   │   │   └── query/route.ts     # Q&A endpoint
-│   │   └── page.tsx               # Main UI
+│   │   ├── globals.css            # Design tokens & utilities
+│   │   ├── layout.tsx
+│   │   └── page.tsx               # Sidebar + chat layout
 │   ├── components/
-│   │   ├── UploadSection.tsx      # File upload component
-│   │   └── ChatSection.tsx       # Chat interface
+│   │   ├── UploadSection.tsx      # Drag-and-drop uploader
+│   │   └── ChatSection.tsx        # Chat interface
 │   ├── lib/
-│   │   ├── chunking.ts            # Document parsing & chunking
-│   │   ├── embeddings.ts          # OpenAI embedding via Vercel AI Gateway
-│   │   ├── vectorStore.ts         # Upstash Vector (hosted)
+│   │   ├── chunking.ts            # Sentence-aware chunker
+│   │   ├── embeddings.ts          # Vercel AI Gateway embeddings
+│   │   ├── vectorStore.ts         # Upstash Vector client
 │   │   └── groq.ts                # LLM generation (Vercel AI SDK)
 │   └── types/
-│       └── index.ts               # TypeScript interfaces
-├── .env.local                     # Environment variables
-├── next.config.ts                # Next.js configuration
+│       └── index.ts
+├── .env                           # Environment variables (not committed)
+├── next.config.ts
 ├── package.json
 └── README.md
 ```
-
-## Future Improvements
-
-- [ ] Support for more document formats (DOCX, HTML)
-- [ ] Persistent vector storage (ChromaDB, Pinecone)
-- [ ] Multiple document storage and querying
-- [ ] Streaming responses for better UX
-- [ ] Conversation history
-- [ ] Citation highlighting
-- [ ] Dark mode support

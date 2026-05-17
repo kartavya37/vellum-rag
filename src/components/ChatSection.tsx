@@ -43,7 +43,7 @@ export default function ChatSection({ hasDocument = false }: { hasDocument?: boo
       const data = await response.json();
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: data.answer ?? 'No answer returned.' },
+        { role: 'assistant', content: data.answer ?? 'No answer returned.', crag: data.crag },
       ]);
     } catch {
       setMessages((prev) => [
@@ -190,7 +190,58 @@ function Message({ msg }: { msg: ChatMessage }) {
         <div className="text-[0.92rem] leading-relaxed whitespace-pre-wrap text-[var(--foreground)]">
           {msg.content}
         </div>
+        {msg.role === 'assistant' && msg.crag && <CragTraceBadge crag={msg.crag} />}
       </div>
+    </div>
+  );
+}
+
+function CragTraceBadge({ crag }: { crag: NonNullable<ChatMessage['crag']> }) {
+  const [open, setOpen] = useState(false);
+
+  const actionLabel =
+    crag.action === 'use_retrieved'
+      ? 'Retrieved context was relevant'
+      : crag.action === 'rewrite_and_retry'
+      ? 'Rewrote query for better recall'
+      : 'No relevant context found';
+
+  const actionTone =
+    crag.action === 'use_retrieved'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : crag.action === 'rewrite_and_retry'
+      ? 'text-amber-600 dark:text-amber-400'
+      : 'text-rose-600 dark:text-rose-400';
+
+  return (
+    <div className="mt-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-[0.7rem] inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--border)] bg-[var(--surface-muted)]/60 hover:bg-[var(--surface-muted)] transition-colors"
+      >
+        <span className={`font-semibold ${actionTone}`}>CRAG</span>
+        <span className="text-[var(--foreground-muted)]">{actionLabel}</span>
+        <span className="text-[var(--foreground-subtle)]">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="mt-2 text-[0.7rem] leading-relaxed rounded-lg border border-[var(--border)] bg-[var(--surface-muted)]/40 p-3 space-y-1 text-[var(--foreground-muted)]">
+          <div>
+            Initial retrieval: <span className="text-[var(--foreground)]">{crag.initialRelevant}/{crag.initialRetrieved}</span> graded relevant
+          </div>
+          {crag.rewrittenQuery && (
+            <>
+              <div>
+                Rewritten query:{' '}
+                <span className="text-[var(--foreground)] italic">&ldquo;{crag.rewrittenQuery}&rdquo;</span>
+              </div>
+              <div>
+                Re-retrieval: <span className="text-[var(--foreground)]">{crag.rewriteRelevant}/{crag.rewriteRetrieved}</span> additional relevant
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

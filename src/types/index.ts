@@ -26,7 +26,17 @@ export interface SearchResult {
   };
 }
 
+export interface CragTrace {
+  initialRetrieved: number;
+  initialRelevant: number;
+  rewrittenQuery: string | null;
+  rewriteRetrieved: number;
+  rewriteRelevant: number;
+  action: 'use_retrieved' | 'rewrite_and_retry' | 'no_relevant_context';
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  crag?: CragTrace;
 }
